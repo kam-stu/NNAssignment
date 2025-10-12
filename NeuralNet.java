@@ -2,10 +2,18 @@ import java.util.Random;
 
 class NeuralNet {
 
+	// learning and testing dataset - stored as CSV's
+	private String learningCSV;
+	private String testingCSV;
+
 	// node amt for each layer
 	private int inputLayer;
 	private int hiddenLayer;
 	private int outputLayer;
+
+	// arrays for the mini batches
+	private double[][] batchInput;
+	private double[][] batchOutput;
 	
 	// outputs
 	private double[][] Whidden;
@@ -23,16 +31,15 @@ class NeuralNet {
 	}
 
 	private void train(double[][] inputTrain, double[][] outputTrain, int epoch) {
-		for (int i=0; i<epoch; i++) {
-			for (int j=0; j < inputTrain.length; j++) {
-				double[] hiddenOut = forwardProp(inputTrain[j], Whidden, Bhidden);
-				double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
+		// put input into mini batch
 
-				// compute loss
-				
-				// backprop
-			}
+		for (int i=0; i<epoch; i++) {
+				// loop through mini batches
+					// forward prop
+					// compute loss
+					// backprop
 		}
+		
 	}
 
 	private void initWeights() {
@@ -65,7 +72,7 @@ class NeuralNet {
 	}
 
 	private double[] forwardProp(double[] X, double[][] W, double[] b) {
-		double[] outputs = new double[b.length];
+		double[] activations = new double[b.length];
 		
 		for (int i=0; i<b.length; i++) {
 			double Z = 0.0;
@@ -73,15 +80,37 @@ class NeuralNet {
 				Z += X[j] * W[j][i]; // dot product
 			}
 			Z += b[i];
-			outputs[i] = this.sigmoid(Z);
+			activations[i] = this.sigmoid(Z);
 		}
 
-		return outputs;
+		return activations;
 	}
 
 	private double sigmoid(double input) {
 		return 1 / (1 + Math.exp(-(input)));
 	}
 	
-	private void backProp(double[] X, double[] Y) {}
+	private void backProp(double[][] X, double[][] Y, double[][]Ai, double[][]Ao) {}
+
+	private double[][] parser(String file) {return null;}
+
+	private double[][] transpose(double[][] matrix) {
+		double[][] temp = new double[matrix[0].length][matrix.length];
+		for (int i=0; i<matrix.length; i++) {
+			for (int j=0; j<matrix[i].length;j++) {
+				temp[j][i] = matrix[i][j];
+			}
+		}
+		return temp;
+	}
+	private double[][] hadamardProd(double[][] A, double[][] B) {
+		double[][] res = new double[A.length][A[0].length];
+		
+		for (int i=0; i<A.length; i++) {
+			for (int j=0; j<A[0].length; j++) {
+				res[i][j] = A[i][j] * B[i][j];
+			}
+		}
+		return res;
+	}
 }
