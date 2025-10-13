@@ -34,10 +34,10 @@ class NeuralNet {
 		// put input into mini batch
 
 		for (int i=0; i<epoch; i++) {
-				// loop through mini batches
-					// forward prop
-					// compute loss
-					// backprop
+			// loop through mini batches
+				// forward prop
+				// compute loss
+				// backprop
 		}
 		
 	}
@@ -90,7 +90,56 @@ class NeuralNet {
 		return 1 / (1 + Math.exp(-(input)));
 	}
 	
-	private void backProp(double[][] X, double[][] Y, double[][]Ai, double[][]Ao) {}
+	private void backProp(double[][] X, double[][] Y, double[][]A1, double[][]A2) {
+		int m = X.length;
+		
+		// calculating gradients
+		double[][] B2 = hadamard(
+				hadamard(subtract(A2, Y), A2),
+				subtract(ones(A2.length, A2[0].length), A2)
+				);
+		double[][] W2 = dot(B2, transpose(A1));
+
+		double[][] B1 = hadamard(
+				dot(transpose(W2), B2),
+				hadamard(A1, hadamard(ones(A1.length, A1[0].length), A1))
+				);
+
+		double[][] W1 = dot(B1, transpose(X));
+
+		// updating hidden weight
+		for (int i=0; i<Whidden.length; i++) {
+			for (int j=0; j<Whidden[i].length; j++) {
+				Whidden[i][j] -= this.learningRate / m * W1[i][j];
+			}
+		}
+
+		// update output weight
+		for (int i=0; i<Woutput.length; i++) {
+			for (int j=0; j<Woutput[i].length; j++) {
+				Woutput[i][j] -= this.learningRate / m * W2[i][j];
+			}
+		}
+
+		// update hidden bias
+		for (int i=0; i<Bhidden.length; i++) {
+			double sum =0.0;
+			for (int j=0; j<B1.length; j++) {
+				sum += B1[j][i];
+			}
+			Bhidden[i] -= learningRate / m * sum;
+		}
+
+		// update output bias
+		for (int i=0; i<Boutput.length; i++) {
+			double sum =0.0;
+			for (int j=0; j<B2.length; j++) {
+				sum += B2[j][i];
+			}
+			Boutput[i] -= learningRate / m * sum;
+		}
+
+	}
 
 	private double[][] parser(String file) {return null;}
 
@@ -103,12 +152,49 @@ class NeuralNet {
 		}
 		return temp;
 	}
-	private double[][] hadamardProd(double[][] A, double[][] B) {
+	private double[][] hadamard(double[][] A, double[][] B) {
 		double[][] res = new double[A.length][A[0].length];
 		
 		for (int i=0; i<A.length; i++) {
 			for (int j=0; j<A[0].length; j++) {
 				res[i][j] = A[i][j] * B[i][j];
+			}
+		}
+		return res;
+	}
+	private double[][] subtract(double[][] A, double[][] B) {
+		double[][] res = new double[A.length][A[0].length];
+		for (int i=0; i<A.length; i++) {
+			for (int j=0; j<A[i].length; j++) {
+				res[i][j] = A[i][j] - B[i][j];
+			}
+		}
+		return res;
+	}
+	private double[][] ones(int rows, int cols) {
+		double[][] res = new double[rows][cols];
+		for (int i=0; i<rows; i++) {
+			for (int j=0; j<cols; j++) {
+				res[i][j] = 1.0;
+			}
+		}
+		return res;
+	}
+	private double[][] dot(double[][] A, double[][] B) {
+		int rowsA = A.length;
+		int colsA = A[0].length;
+		int rowsB = B.length;
+		int colsB = B[0].length;
+
+		double[][] res = new double[rowsA][colsB];
+
+		for (int i=0; i<rowsA; i++) {
+			for (int j=0; j<colsB; j++) {
+				double sum =0.0;
+				for (int k=0; k<colsA; k++) {
+					sum+= A[i][k] * B[k][j];
+				}
+				res[i][j] = sum;
 			}
 		}
 		return res;
