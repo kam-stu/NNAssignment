@@ -2,18 +2,10 @@ import java.util.Random;
 
 class NeuralNet {
 
-	// learning and testing dataset - stored as CSV's
-	private String learningCSV;
-	private String testingCSV;
-
 	// node amt for each layer
 	private int inputLayer;
 	private int hiddenLayer;
 	private int outputLayer;
-
-	// arrays for the mini batches
-	private double[][] batchInput;
-	private double[][] batchOutput;
 	
 	// outputs
 	private double[][] Whidden;
@@ -23,23 +15,29 @@ class NeuralNet {
 	private double[] Boutput;
 
 	private int learningRate;
+
+	private boolean isMNIST = true;
 	
-	public NeuralNet(int inputLayer, int hiddenLayer, int outputLayer) {
+	public NeuralNet(int inputLayer, int hiddenLayer, int outputLayer, int learningRate) {
 		this.inputLayer = inputLayer;
 		this.hiddenLayer = hiddenLayer;
 		this.outputLayer = outputLayer;
+		this.learningRate = learningRate;
 	}
 
-	private void train(double[][] inputTrain, double[][] outputTrain, int epoch) {
-		// put input into mini batch
+	public NeuralNet(int inputLayer, int hiddenLayer, int outputLayer, int learningRate, boolean isMNIST) {
+		this.inputLayer = inputLayer;
+		this.hiddenLayer = hiddenLayer;
+		this.outputLayer = outputLayer;
+		this.learningRate = learningRate;
+		this.isMNIST = isMNIST;
+	}
 
-		for (int i=0; i<epoch; i++) {
-			// loop through mini batches
-				// forward prop
-				// compute loss
-				// backprop
-		}
-		
+	public void initWeights(double[][] W1, double[] B1, double[][] W2, double[] B2) {
+		this.Whidden = W1;
+		this.Bhidden = B1;
+		this.Woutput = W2;
+		this.Boutput = B2;
 	}
 
 	private void initWeights() {
@@ -71,77 +69,86 @@ class NeuralNet {
 		
 	}
 
-	private double[] forwardProp(double[] X, double[][] W, double[] b) {
-		double[] activations = new double[b.length];
+	public void train(double[][][] batches, double[][][] output, int epochs, int batchSize) {
 		
-		for (int i=0; i<b.length; i++) {
-			double Z = 0.0;
-			for (int j=0; j<X.length; j++) {
-				Z += X[j] * W[j][i]; // dot product
+		for (int epoch=0; epoch<epochs; epoch++) {
+
+			// loop through batches -> create sum arrays for sum of gradients
+			for (int batch =0; batch < batches.length; batch++) {
+				double[][] w1Sum = new double[Whidden.length][Whidden[0].length];
+				double[] b1Sum = new double[Bhidden.length];
+				double[][] w2Sum = new double[Woutput.length][Woutput[0].length];
+				double[] b2Sum = new double[Boutput.length];
+
+				// loops through the sets of a batch and forward prop
+				for (int set=0; set<batches[batch].length; set++) {
+					System.out.println("=====================================================");
+					System.out.println("Batch " + (batch+1) + "\t Set: " + (set+1)); 
+					double[] A1 = forwardProp(batches[batch][set], Whidden, Bhidden);
+					double[] A2 = forwardProp(A1, Woutput, Boutput);
+					double[] b2G = backPropFinal(A2, output[batch][set]);
+					double[][] w2G = prod(b2G, A1);
+					setSum(w2Sum, w2G);
+					setSum(b2Sum, b2G);
+
+					double[] b1G = backPropHidden(b2G, A1);
+					double[][] w1G = prod(b1G, batches[batch][set]);
+					setSum(w1Sum, w1G);
+					setSum(b1Sum, b1G);
+				}
+
+				// batch finished -> update bias and weights
+				updateB(b2Sum, Boutput, batchSize);
+				updateW(w2Sum, Woutput, batchSize);
+				updateB(b1Sum, Bhidden, batchSize);
+				updateW(w1Sum, Whidden, batchSize);
+				System.out.println("======================== BATCH DONE ===================");
+				System.out.println("B1: ");
+				printArr(Bhidden);
+				System.out.println("W1: ");
+				printMatrix(Whidden);
+				System.out.println("B2: ");
+				printArr(Boutput);
+				System.out.println("W2: ");
+				printMatrix(Woutput);
 			}
-			Z += b[i];
-			activations[i] = this.sigmoid(Z);
 		}
-
-		return activations;
 	}
-
+	
+	private double[] forwardProp(double[] A0, double[][] W, double[] B) {
+		double[] A = new double[B.length];
+		
+		for (int i=0; i<B.length; i++) {
+			double z = B[i];
+			for (int j=0; j<W[i].length; j++) {
+				z += W[i][j] * A0[j];
+			}
+			A[i] = sigmoid(z);
+		}
+		System.out.println("=============================FORWARD PROP=============================");
+		printArr(A);
+		return A;
+	}
+	
 	private double sigmoid(double input) {
 		return 1 / (1 + Math.exp(-(input)));
 	}
-	
-	private void backProp(double[][] X, double[][] Y, double[][]A1, double[][]A2) {
-		int m = X.length;
-		
-		// calculating gradients
-		double[][] B2 = hadamard(
-				hadamard(subtract(A2, Y), A2),
-				subtract(ones(A2.length, A2[0].length), A2)
-				);
-		double[][] W2 = dot(B2, transpose(A1));
 
-		double[][] B1 = hadamard(
-				dot(transpose(W2), B2),
-				hadamard(A1, hadamard(ones(A1.length, A1[0].length), A1))
-				);
-
-		double[][] W1 = dot(B1, transpose(X));
-
-		// updating hidden weight
-		for (int i=0; i<Whidden.length; i++) {
-			for (int j=0; j<Whidden[i].length; j++) {
-				Whidden[i][j] -= this.learningRate / m * W1[i][j];
-			}
-		}
-
-		// update output weight
-		for (int i=0; i<Woutput.length; i++) {
-			for (int j=0; j<Woutput[i].length; j++) {
-				Woutput[i][j] -= this.learningRate / m * W2[i][j];
-			}
-		}
-
-		// update hidden bias
-		for (int i=0; i<Bhidden.length; i++) {
-			double sum =0.0;
-			for (int j=0; j<B1.length; j++) {
-				sum += B1[j][i];
-			}
-			Bhidden[i] -= learningRate / m * sum;
-		}
-
-		// update output bias
-		for (int i=0; i<Boutput.length; i++) {
-			double sum =0.0;
-			for (int j=0; j<B2.length; j++) {
-				sum += B2[j][i];
-			}
-			Boutput[i] -= learningRate / m * sum;
-		}
-
+	private double[] backPropHidden(double[] bG, double[] A) {
+		double[] res = hadamard(
+			dot(transpose(Woutput), bG),
+			hadamard(A, subtract(ones(A.length), A))
+		);
+		return res;
 	}
 
-	private double[][] parser(String file) {return null;}
+	private double[] backPropFinal(double[] A, double[] Y) {
+		double[] res = hadamard(
+			subtract(A, Y),
+			hadamard(A, subtract(ones(A.length), A))
+		);
+		return res;
+	}
 
 	private double[][] transpose(double[][] matrix) {
 		double[][] temp = new double[matrix[0].length][matrix.length];
@@ -152,51 +159,97 @@ class NeuralNet {
 		}
 		return temp;
 	}
-	private double[][] hadamard(double[][] A, double[][] B) {
-		double[][] res = new double[A.length][A[0].length];
-		
+
+	private double[] hadamard(double[] A, double[] B){
+		double[] res = new double[A.length];
 		for (int i=0; i<A.length; i++) {
+			res[i] = A[i] * B[i];
+		}
+		return res;
+	}
+
+	// subtracts 2 arrays (A - B)
+	private double[] subtract(double[] A, double[] B) {
+		double[] res = new double[A.length];
+		for (int i=0; i<A.length; i++) {
+			res[i] = A[i] - B[i];
+		}
+		return res;
+	}
+
+	// creates an array of all 1's 
+	private double[] ones(int length) {
+		double[] res = new double[length];
+		for (int i=0; i<length; i++) {
+			res[i] = 1;			
+		}
+		return res;
+	}
+
+	private double[] dot(double[][] A, double[] B) {
+		double[] res = new double[A.length];
+		for (int i=0; i<A.length; i++) {
+			double sum =0;
 			for (int j=0; j<A[0].length; j++) {
-				res[i][j] = A[i][j] * B[i][j];
+				sum += A[i][j] * B[j];
 			}
+			res[i] = sum;
 		}
 		return res;
 	}
-	private double[][] subtract(double[][] A, double[][] B) {
-		double[][] res = new double[A.length][A[0].length];
+
+	private double[][] prod(double[] A, double[] B) {
+		double[][] res = new double[A.length][B.length];
 		for (int i=0; i<A.length; i++) {
-			for (int j=0; j<A[i].length; j++) {
-				res[i][j] = A[i][j] - B[i][j];
+			for (int j=0; j<B.length; j++) {
+				res[i][j] = A[i] * B[j];
 			}
 		}
 		return res;
 	}
-	private double[][] ones(int rows, int cols) {
-		double[][] res = new double[rows][cols];
-		for (int i=0; i<rows; i++) {
-			for (int j=0; j<cols; j++) {
-				res[i][j] = 1.0;
+
+	// Sets the sum of 1 matrix into another (used for updating Weights using the sum of Weight Gradient)
+	private void setSum(double[][] arr, double[][] gradient) {
+		for (int i=0; i<arr.length; i++) {
+			for (int j=0; j<arr[i].length; j++) {
+				arr[i][j] += gradient[i][j];
 			}
 		}
-		return res;
 	}
-	private double[][] dot(double[][] A, double[][] B) {
-		int rowsA = A.length;
-		int colsA = A[0].length;
-		int rowsB = B.length;
-		int colsB = B[0].length;
 
-		double[][] res = new double[rowsA][colsB];
+	// Sets the sum of 1 array into another (used for updating Bias using the sum of Bias Gradient)
+	private void setSum(double[] arr, double[] gradient) {
+		for (int i=0; i<arr.length; i++) {
+				arr[i] += gradient[i];
+		}
+	}
 
-		for (int i=0; i<rowsA; i++) {
-			for (int j=0; j<colsB; j++) {
-				double sum =0.0;
-				for (int k=0; k<colsA; k++) {
-					sum+= A[i][k] * B[k][j];
-				}
-				res[i][j] = sum;
+	// updates Bias
+	private void updateB(double[] bG, double[] B, int batchSize) {
+		for (int i=0; i<B.length; i++) {
+			B[i] -= (this.learningRate / batchSize) * bG[i];
+		}
+	}
+
+	// updates Weights
+	private void updateW(double[][] wG, double[][] W, int batchSize) {
+		for (int i=0; i<W.length; i++) {
+			for (int j=0; j<W[i].length; j++) {
+				W[i][j] -= (this.learningRate / batchSize) * wG[i][j];
 			}
 		}
-		return res;
+	}
+
+	private void printArr(double[] arr) {
+		for (int i=0; i<arr.length; i++) {
+			System.out.println(arr[i]);
+		}
+	}
+	private void printMatrix(double[][] matrix) {
+		for (int i=0; i<matrix.length; i++) {
+			for (int j=0; j<matrix[i].length; j++) {
+				System.out.println(matrix[i][j]);
+			}
+		}
 	}
 }
