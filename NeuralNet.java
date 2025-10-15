@@ -1,4 +1,5 @@
-import java.util.Random;
+import java.util.*;
+import java.io.*;
 
 class NeuralNet {
 
@@ -6,6 +7,13 @@ class NeuralNet {
 	private int inputLayer;
 	private int hiddenLayer;
 	private int outputLayer;
+
+	// inputs
+	private double[][] inputs;
+	private double[][] outputs;
+
+	private double[][][] miniBatchInputs;
+	private double[][][] miniBatchOutputs;
 	
 	// outputs
 	private double[][] Whidden;
@@ -14,23 +22,16 @@ class NeuralNet {
 	private double[][] Woutput;
 	private double[] Boutput;
 
-	private int learningRate;
+	private double learningRate;
 
-	private boolean isMNIST = true;
+	private boolean isTrained = false;
+	private boolean hasWeights = false;
 	
-	public NeuralNet(int inputLayer, int hiddenLayer, int outputLayer, int learningRate) {
+	public NeuralNet(int inputLayer, int hiddenLayer, int outputLayer, double learningRate) {
 		this.inputLayer = inputLayer;
 		this.hiddenLayer = hiddenLayer;
 		this.outputLayer = outputLayer;
 		this.learningRate = learningRate;
-	}
-
-	public NeuralNet(int inputLayer, int hiddenLayer, int outputLayer, int learningRate, boolean isMNIST) {
-		this.inputLayer = inputLayer;
-		this.hiddenLayer = hiddenLayer;
-		this.outputLayer = outputLayer;
-		this.learningRate = learningRate;
-		this.isMNIST = isMNIST;
 	}
 
 	public void initWeights(double[][] W1, double[] B1, double[][] W2, double[] B2) {
@@ -38,82 +39,251 @@ class NeuralNet {
 		this.Bhidden = B1;
 		this.Woutput = W2;
 		this.Boutput = B2;
+
+		this.hasWeights = true;
+	}
+
+	public void readCSV(String filename) {
+		List<double[]> inputList = new ArrayList<>();
+		List<double[]> outputList = new ArrayList<>();
+
+		try (BufferedReader br = new BufferedReader(new FileReader(filename))) {
+			String line;
+			while ((line=br.readLine()) != null) {
+				String[] tokens = line.split(",");
+				int label = Integer.parseInt(tokens[0]);
+
+				double[] output = new double[10];
+				output[label] = 1;
+
+				double[] input = new double[tokens.length -1];
+				for (int i=1; i<tokens.length; i++) {
+					// i-1 to make up for removing token[0] for output
+					// tokens[i] / 255.0 naturalizes input
+					input[i-1] = Double.parseDouble(tokens[i]) / 255.0;
+				}
+
+				inputList.add(input);
+				outputList.add(output);
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+
+		this.inputs = inputList.toArray(new double[inputList.size()][]);
+		this.outputs = outputList.toArray(new double[outputList.size()][]);
 	}
 
 	private void initWeights() {
 		// initialize sizes for all arrays
-		this.Whidden = new double[this.inputLayer][this.hiddenLayer];
+		this.Whidden = new double[this.hiddenLayer][this.inputLayer];
 		this.Bhidden = new double[this.hiddenLayer];
-		this.Woutput = new double[this.hiddenLayer][this.outputLayer];
+		this.Woutput = new double[this.outputLayer][this.hiddenLayer];
 		this.Boutput = new double[this.outputLayer];
 
 		Random rand = new Random();
 		
 		// initialize random weights and biases
+		// random values are in between -1 and 1
 		for (int i=0; i<Whidden.length; i++) {
 			for (int j=0; j<Whidden[i].length; j++) {
-				Whidden[i][j] = rand.nextDouble() * 0.1;
+				Whidden[i][j] = rand.nextDouble() * 2 - 1;
 			}
 		}
 		for (int i=0; i<Bhidden.length; i++) {
-			Bhidden[i] = 0;
+			Bhidden[i] = rand.nextDouble() * 2 - 1;
 		}
 		for (int i=0; i<Woutput.length; i++) {
 			for (int j=0; j<Woutput[i].length; j++) {
-				Woutput[i][j] = rand.nextDouble() * 0.1;
+				Woutput[i][j] = rand.nextDouble() * 2 - 1;
 			}
 		}
 		for (int i=0; i<Boutput.length; i++) {
-			Boutput[i] = 1;
+			Boutput[i] = rand.nextDouble() * 2 - 1;
 		}
+
+		this.hasWeights = true;
 		
 	}
 
-	public void train(double[][][] batches, double[][][] output, int epochs, int batchSize) {
+	// implicitly generates a random batch based on total num of batches
+	public void createMiniBatches(int batchSize) {
+		int total = this.inputs.length;
+		int numBatches = (int) Math.ceil((double) total / batchSize);
+
+		int curr = 0;
+
+		miniBatchInputs = new double[numBatches][][];
+		miniBatchOutputs = new double[numBatches][][];
+
+		for (int batch=0; batch<numBatches; batch++) {
+			int currBatchSize = Math.min(batchSize, total - curr);
+			miniBatchInputs[batch] = new double[currBatchSize][];
+			miniBatchOutputs[batch] = new double[currBatchSize][];
+
+			for (int i=0; i<currBatchSize; i++) {
+				miniBatchInputs[batch][i] = inputs[curr];
+				miniBatchOutputs[batch][i] = outputs[curr];
+				curr++;
+			}
+		}
+	}
+
+	private void shuffleData() {
+		int n = this.inputs.length;
+		Random rand = new Random();
+
+		for (int i=n-1; i>0; i--) {
+			int j = rand.nextInt(i+1); // gets random index
+
+			// swap inputs
+			double[] tempInput = this.inputs[i];
+			this.inputs[i] = this.inputs[j];
+			this.inputs[j] = tempInput;
+
+			// swap outputs
+			double[] tempOut = this.outputs[i];
+			this.outputs[i] = this.outputs[j];
+			this.outputs[j] = tempOut;
+		}
+	}
+	
+
+	public void train(int epochs, int batchSize) {
 		
+		initWeights();
+	
 		for (int epoch=0; epoch<epochs; epoch++) {
+			shuffleData();
+			createMiniBatches(batchSize);
+			
+			// values for displaying correct vs seen
+			// int[] represents the correct and total for number = index
+			// ie: correct[0] shows all correct values for the digit 0
+			int[] correctDigit = new int[10];
+			int[] totalDigit = new int[10];
+			int totalCorrect = 0;
+			int totalSeen = 0;
 
 			// loop through batches -> create sum arrays for sum of gradients
-			for (int batch =0; batch < batches.length; batch++) {
+			for (int batch =0; batch < this.miniBatchInputs.length; batch++) {
 				double[][] w1Sum = new double[Whidden.length][Whidden[0].length];
 				double[] b1Sum = new double[Bhidden.length];
 				double[][] w2Sum = new double[Woutput.length][Woutput[0].length];
 				double[] b2Sum = new double[Boutput.length];
 
 				// loops through the sets of a batch and forward prop
-				for (int set=0; set<batches[batch].length; set++) {
-					System.out.println("=====================================================");
-					System.out.println("Batch " + (batch+1) + "\t Set: " + (set+1)); 
-					double[] A1 = forwardProp(batches[batch][set], Whidden, Bhidden);
+				for (int set=0; set<this.miniBatchInputs[batch].length; set++) {
+					double[] A1 = forwardProp(this.miniBatchInputs[batch][set], Whidden, Bhidden);
 					double[] A2 = forwardProp(A1, Woutput, Boutput);
-					double[] b2G = backPropFinal(A2, output[batch][set]);
+					double[] b2G = backPropFinal(A2, this.miniBatchOutputs[batch][set]);
 					double[][] w2G = prod(b2G, A1);
 					setSum(w2Sum, w2G);
 					setSum(b2Sum, b2G);
 
 					double[] b1G = backPropHidden(b2G, A1);
-					double[][] w1G = prod(b1G, batches[batch][set]);
+					double[][] w1G = prod(b1G, this.miniBatchInputs[batch][set]);
 					setSum(w1Sum, w1G);
 					setSum(b1Sum, b1G);
-				}
 
+					// get accuracy numbers
+					int predicted = oneHot(A2);
+					int actual = oneHot(this.miniBatchOutputs[batch][set]);
+					totalSeen++;
+					totalDigit[actual]++;
+					if (predicted == actual) {
+						correctDigit[actual]++;
+						totalCorrect++;
+					}
+
+				}
 				// batch finished -> update bias and weights
 				updateB(b2Sum, Boutput, batchSize);
 				updateW(w2Sum, Woutput, batchSize);
 				updateB(b1Sum, Bhidden, batchSize);
 				updateW(w1Sum, Whidden, batchSize);
-				System.out.println("======================== BATCH DONE ===================");
-				System.out.println("B1: ");
-				printArr(Bhidden);
-				System.out.println("W1: ");
-				printMatrix(Whidden);
-				System.out.println("B2: ");
-				printArr(Boutput);
-				System.out.println("W2: ");
-				printMatrix(Woutput);
+			}
+
+			System.out.println("Epoch " + (epoch+1) + " satistics: ");
+			for (int i=0; i<10; i++) {
+				System.out.print("Digit " + i +": " + correctDigit[i] + "/" + totalDigit[i] + "\t\t");
+				if (i % 2 == 1) {
+					System.out.println();
+				}
+			}
+			double accuracy = 100.0 * totalCorrect / totalSeen;
+			System.out.println("Accuracy: " + totalCorrect + "/" + totalSeen + " = " + accuracy + "%");
+			System.out.println();
+		}
+		
+		this.isTrained = true;
+	}
+
+	public void testBatch() {
+    if (!isTrained) {
+        System.out.println("Network is not trained yet!");
+        return;
+    }
+
+    int totalCorrect = 0;
+    int totalSeen = inputs.length;
+    int[] correctDigit = new int[10];
+    int[] totalDigit = new int[10];
+
+    for (int i = 0; i < inputs.length; i++) {
+        double[] hiddenOut = forwardProp(inputs[i], Whidden, Bhidden);
+        double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
+
+        int predicted = oneHot(finalOut);
+        int actual = oneHot(outputs[i]);
+
+        totalDigit[actual]++;
+        if (predicted == actual) {
+            correctDigit[actual]++;
+            totalCorrect++;
+        }
+    }
+
+    System.out.println("Batch Test Results:");
+    for (int i = 0; i < 10; i++) {
+        System.out.println("Digit " + i + ": " + correctDigit[i] + "/" + totalDigit[i]);
+    }
+
+    double accuracy = 100.0 * totalCorrect / totalSeen;
+    System.out.println("Overall Accuracy: " + totalCorrect + "/" + totalSeen + " = " + accuracy + "%");
+}
+
+
+	// tests the network on a single input
+	public int test(double[] input) {
+		if (!isTrained) {
+			System.out.println("Network is not trained yet!");
+			return -1;
+		}
+
+		double[] hiddenOut = forwardProp(input, Whidden, Bhidden);
+		double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
+
+		return oneHot(finalOut);
+	}
+
+	// function for getting the max activation 
+	// returns the index of max value
+	private int oneHot(double[] activations) {
+		int maxIndex = 0;
+		double maxVal = activations[0];
+
+		for (int i=0; i<activations.length; i++) {
+			if (activations[i] > maxVal) {
+				maxVal = activations[i];
+				maxIndex = i;
 			}
 		}
+		return maxIndex;
 	}
+
+	public void loadWeights() {}
 	
 	private double[] forwardProp(double[] A0, double[][] W, double[] B) {
 		double[] A = new double[B.length];
@@ -125,8 +295,6 @@ class NeuralNet {
 			}
 			A[i] = sigmoid(z);
 		}
-		System.out.println("=============================FORWARD PROP=============================");
-		printArr(A);
 		return A;
 	}
 	
@@ -143,6 +311,7 @@ class NeuralNet {
 	}
 
 	private double[] backPropFinal(double[] A, double[] Y) {
+		
 		double[] res = hadamard(
 			subtract(A, Y),
 			hadamard(A, subtract(ones(A.length), A))
@@ -227,7 +396,7 @@ class NeuralNet {
 	// updates Bias
 	private void updateB(double[] bG, double[] B, int batchSize) {
 		for (int i=0; i<B.length; i++) {
-			B[i] -= (this.learningRate / batchSize) * bG[i];
+			B[i] -= ((double) this.learningRate / batchSize) * bG[i];
 		}
 	}
 
@@ -235,7 +404,7 @@ class NeuralNet {
 	private void updateW(double[][] wG, double[][] W, int batchSize) {
 		for (int i=0; i<W.length; i++) {
 			for (int j=0; j<W[i].length; j++) {
-				W[i][j] -= (this.learningRate / batchSize) * wG[i][j];
+				W[i][j] -= ((double) this.learningRate / batchSize) * wG[i][j];
 			}
 		}
 	}
