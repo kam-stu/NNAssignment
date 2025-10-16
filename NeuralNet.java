@@ -55,14 +55,15 @@ class NeuralNet {
 			while ((line=br.readLine()) != null) {
 				String[] tokens = line.split(",");
 				int label = Integer.parseInt(tokens[0]);
-
+				
+				// creates a one hot arr
 				double[] output = new double[10];
 				output[label] = 1;
 
 				double[] input = new double[tokens.length -1];
 				for (int i=1; i<tokens.length; i++) {
 					// i-1 to make up for removing token[0] for output
-					// tokens[i] / 255.0 naturalizes input
+					// tokens[i] / 255.0 naturalizes input (0.0 - 1.0)
 					input[i-1] = Double.parseDouble(tokens[i]) / 255.0;
 				}
 
@@ -267,6 +268,8 @@ class NeuralNet {
 			return -1;
 		}
 
+		asciiArt(input);
+
 		double[] hiddenOut = forwardProp(input, Whidden, Bhidden);
 		double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
 
@@ -414,11 +417,42 @@ class NeuralNet {
 		}
 	}
 
+	private void asciiArt(double[] input) {
+		for(int i=0; i< input.length; i++) {
+			System.out.print(generateChar(input[i]));
+
+			// because original image is 28x28
+			// keeps the formatting correct
+			if ((i+1)%28 == 0) {
+				System.out.println();
+			}
+		}
+	}
+	
+	// Holds the ranges for what each input should return (1.0 => pure white pixel => return #
+	// Made this function then IMMEDIATELY realized i couldve just used a hashmap LOL
+	private char generateChar(double value) {
+		if (value <= 0.05) return ' ';
+		if (value <= 0.2) return '.';
+		if (value <= 0.5) return '!';
+		if (value <= 0.10) return '*';
+		if (value <= 0.15) return '^';
+		if (value <= 0.25) return 'o';
+		if (value <= 0.35) return '+';
+		if (value <= 0.50) return '=';
+		if (value <= 0.60) return '$';
+		if (value <= 0.75) return '%';
+		if (value <= 0.85) return '@';
+		if (value <= 1.0) return '#';
+		return '!';
+	}
+
 	private void printArr(double[] arr) {
 		for (int i=0; i<arr.length; i++) {
 			System.out.println(arr[i]);
 		}
 	}
+
 	private void printMatrix(double[][] matrix) {
 		for (int i=0; i<matrix.length; i++) {
 			for (int j=0; j<matrix[i].length; j++) {
