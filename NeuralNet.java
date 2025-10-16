@@ -34,6 +34,8 @@ class NeuralNet {
 		this.learningRate = learningRate;
 	}
 
+
+	//  initializes weights and biases based on given values
 	public void initWeights(double[][] W1, double[] B1, double[][] W2, double[] B2) {
 		this.Whidden = W1;
 		this.Bhidden = B1;
@@ -43,6 +45,7 @@ class NeuralNet {
 		this.hasWeights = true;
 	}
 
+	// parses CSV and adds inputs and outputs to their respective fields
 	public void readCSV(String filename) {
 		List<double[]> inputList = new ArrayList<>();
 		List<double[]> outputList = new ArrayList<>();
@@ -188,8 +191,8 @@ class NeuralNet {
 					setSum(b1Sum, b1G);
 
 					// get accuracy numbers
-					int predicted = oneHot(A2);
-					int actual = oneHot(this.miniBatchOutputs[batch][set]);
+					int predicted = argMax(A2);
+					int actual = argMax(this.miniBatchOutputs[batch][set]);
 					totalSeen++;
 					totalDigit[actual]++;
 					if (predicted == actual) {
@@ -204,7 +207,6 @@ class NeuralNet {
 				updateB(b1Sum, Bhidden, batchSize);
 				updateW(w1Sum, Whidden, batchSize);
 			}
-
 			System.out.println("Epoch " + (epoch+1) + " satistics: ");
 			for (int i=0; i<10; i++) {
 				System.out.print("Digit " + i +": " + correctDigit[i] + "/" + totalDigit[i] + "\t\t");
@@ -220,42 +222,45 @@ class NeuralNet {
 		this.isTrained = true;
 	}
 
+	// tests a batch of inputs and outputs
+	// assumes that the test inputs and outputs are set to the input and output
+	// values for the NeuralNetwork
 	public void testBatch() {
-    if (!isTrained) {
-        System.out.println("Network is not trained yet!");
-        return;
-    }
+    		if (!isTrained) {
+        		System.out.println("Network is not trained yet!");
+        		return;
+    	}
 
-    int totalCorrect = 0;
-    int totalSeen = inputs.length;
-    int[] correctDigit = new int[10];
-    int[] totalDigit = new int[10];
+    		int totalCorrect = 0;
+    		int totalSeen = inputs.length;
+    		int[] correctDigit = new int[10];
+    		int[] totalDigit = new int[10];
 
-    for (int i = 0; i < inputs.length; i++) {
-        double[] hiddenOut = forwardProp(inputs[i], Whidden, Bhidden);
-        double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
+    		for (int i = 0; i < inputs.length; i++) {
+        		double[] hiddenOut = forwardProp(inputs[i], Whidden, Bhidden);
+        		double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
 
-        int predicted = oneHot(finalOut);
-        int actual = oneHot(outputs[i]);
+        		int predicted = argMax(finalOut);
+        		int actual = argMax(outputs[i]);
 
-        totalDigit[actual]++;
-        if (predicted == actual) {
-            correctDigit[actual]++;
-            totalCorrect++;
-        }
-    }
+        		totalDigit[actual]++;
+        		if (predicted == actual) {
+            			correctDigit[actual]++;
+            			totalCorrect++;
+        		}
+    		}
 
-    System.out.println("Batch Test Results:");
-    for (int i = 0; i < 10; i++) {
-        System.out.println("Digit " + i + ": " + correctDigit[i] + "/" + totalDigit[i]);
-    }
+    		System.out.println("Batch Test Results:");
+    		for (int i = 0; i < 10; i++) {
+        		System.out.println("Digit " + i + ": " + correctDigit[i] + "/" + totalDigit[i]);
+    		}
 
-    double accuracy = 100.0 * totalCorrect / totalSeen;
-    System.out.println("Overall Accuracy: " + totalCorrect + "/" + totalSeen + " = " + accuracy + "%");
-}
+    		double accuracy = 100.0 * totalCorrect / totalSeen;
+    		System.out.println("Overall Accuracy: " + totalCorrect + "/" + totalSeen + " = " + accuracy + "%");
+	}
 
 
-	// tests the network on a single input
+	// tests the network on a single given input
 	public int test(double[] input) {
 		if (!isTrained) {
 			System.out.println("Network is not trained yet!");
@@ -265,12 +270,12 @@ class NeuralNet {
 		double[] hiddenOut = forwardProp(input, Whidden, Bhidden);
 		double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
 
-		return oneHot(finalOut);
+		return argMax(finalOut);
 	}
 
 	// function for getting the max activation 
 	// returns the index of max value
-	private int oneHot(double[] activations) {
+	private int argMax(double[] activations) {
 		int maxIndex = 0;
 		double maxVal = activations[0];
 
