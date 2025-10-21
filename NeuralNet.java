@@ -8,29 +8,33 @@ class NeuralNet {
 	private int hiddenLayer;
 	private int outputLayer;
 
-	// inputs
+	// inputs for training
 	private double[][] inputs;
 	private double[][] outputs;
 
+	// inputs for testing
 	private double[][] testInput;
 	private double[][] testOutput;
 
+	// inputs for mini batching
 	private double[][][] miniBatchInputs;
 	private double[][][] miniBatchOutputs;
 	
-	// outputs
+	// hidden layer weights and bias
 	private double[][] Whidden;
 	private double[] Bhidden;
 	
+	// output layer weights and bias
 	private double[][] Woutput;
 	private double[] Boutput;
 
 	private double learningRate;
 
+	// flags to make sure a nn is trained and has appropriate values
 	private boolean isTrained = false;
 	private boolean hasWeights = false;
 
-
+	// all file names for training, testing, and saving data
 	private final String trainCSV = "mnist_train.csv";
 	private final String testCSV = "mnist_test.csv";
 	private final String savedCSV = "saved_data.csv";
@@ -62,6 +66,8 @@ class NeuralNet {
 	}
 
 	// parses CSV and adds inputs and outputs to their respective fields
+	// isTrain flag checks if it should be using and adding to training set values
+	// or testing set values
 	public void readCSV(boolean isTrain) {
 		String filename;
 		if (isTrain) {
@@ -193,6 +199,9 @@ class NeuralNet {
 		}
 	
 		for (int epoch=0; epoch<epochs; epoch++) {
+
+			// shuffles data and creates mini batches.  No mini btach will have the same 
+			// ordering as the previous
 			shuffleData();
 			createMiniBatches(batchSize);
 			
@@ -257,38 +266,43 @@ class NeuralNet {
 		this.isTrained = true;
 	}
 
-	// tests a batch of inputs and outputs
-	// assumes that the test inputs and outputs are set to the input and output
-	// values for the NeuralNetwork
-	public void testBatch(boolean isTest) {
+	// tests a batch of inputs and outputs values based on useTrainSet boolean
+	// if useTrainSet -> use mnist_train; else use mnist_test
+	public void testBatch(boolean useTrainSet) {
     		if (!isTrained) {
         		System.out.println("Network is not trained yet!");
         		return;
-    	}
+    		}
+			double[][] input;
+			double[][] out;
+
+			if (useTrainSet) {
+				input = this.inputs;
+				out = this.outputs;
+			}
+			else {
+				input = this.testInput;
+				out = this.testOutput;
+			}
 
     		int totalCorrect = 0;
-    		int totalSeen = inputs.length;
+    		int totalSeen = input.length;
     		int[] correctDigit = new int[10];
     		int[] totalDigit = new int[10];
 		
 		
-    		for (int i = 0; i < inputs.length; i++) {
-        		double[] hiddenOut = forwardProp(inputs[i], Whidden, Bhidden);
+    		for (int i = 0; i < input.length; i++) {
+        		double[] hiddenOut = forwardProp(input[i], Whidden, Bhidden);
         		double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
 
         		int predicted = argMax(finalOut);
-        		int actual = argMax(outputs[i]);
+        		int actual = argMax(out[i]);
 
         		totalDigit[actual]++;
         		if (predicted == actual) {
             			correctDigit[actual]++;
             			totalCorrect++;
         		}
-    		}
-
-    		System.out.println("Batch Test Results:");
-    		for (int i = 0; i < 10; i++) {
-        		System.out.println("Digit " + i + ": " + correctDigit[i] + "/" + totalDigit[i]);
     		}
 
     		double accuracy = 100.0 * totalCorrect / totalSeen;
@@ -329,6 +343,7 @@ class NeuralNet {
 		return maxIndex;
 	}
 
+	// forward prop using sigmoid activation
 	private double[] forwardProp(double[] A0, double[][] W, double[] B) {
 		double[] A = new double[B.length];
 		
@@ -346,6 +361,7 @@ class NeuralNet {
 		return 1 / (1 + Math.exp(-(input)));
 	}
 
+	// backprop for hidden layer(s) of the nn
 	private double[] backPropHidden(double[] bG, double[] A) {
 		double[] res = hadamard(
 			dot(transpose(Woutput), bG),
@@ -354,6 +370,7 @@ class NeuralNet {
 		return res;
 	}
 
+	// backprop for final layer of the nn
 	private double[] backPropFinal(double[] A, double[] Y) {
 		
 		double[] res = hadamard(
@@ -411,6 +428,7 @@ class NeuralNet {
 		}
 	}
 
+	// assigns a value given a section from the savedCSV
 	private void assignVal(String section, ArrayList<double[]> val) {
 		switch (section) {
 			case "Whidden":
@@ -435,8 +453,16 @@ class NeuralNet {
 	}
 
 	// puts all current weights and biases into the a csv to be loaded later
+	/* Creates/Writes to the file with the following format:
+	 * 
+	 * Hidden layer weights
+	 * <data>
+	 * Hidden layer bias
+	 * <data>
+	 * etc.
+	 */
 	public void saveWeights() {
-		try (FileWriter writer = new FileWriter(savedCSV)) {
+		try (FileWriter writer = new FileWriter(savedCSV, false)) {
 
 			writer.write("Whidden\n");
 			for (int i=0; i<Whidden.length; i++) {
@@ -444,7 +470,6 @@ class NeuralNet {
 					if (j<Whidden[i].length-1) {
 						writer.write(Whidden[i][j] + ",");
 					}
-
 					// at last element, don't put comma
 					else {
 						writer.write(Whidden[i][j] + "");
@@ -470,8 +495,6 @@ class NeuralNet {
 					if (j<Woutput[i].length-1) {
 						writer.write(Woutput[i][j] + ",");
 					}
-
-					// at last element, don't put comma
 					else {
 						writer.write(Woutput[i][j] + "");
 					}
@@ -500,6 +523,12 @@ class NeuralNet {
 	// Function for displaying the test case, expected and actual output, and drawing the ASCII art of 
 	// all testing cases
 	public void displayImage(boolean onlyIncorrect) {
+
+		if (!isTrained) {
+			System.out.println("Network is not trained!");
+			return;
+		}
+
 		Scanner scanner = new Scanner(System.in);
 		int index = 0;
 
@@ -518,22 +547,25 @@ class NeuralNet {
 				predicted = this.test(index, true);
 			}
 
+			// print related information about the test case and outputs
 			System.out.println ("Testing Case #" + (index+1) + 
 			": Correct classification = " + actual + " Network Output = " + predicted +  
 			(actual==predicted ? " Correct" : " Incorrect"));
 
 			asciiArt(this.testInput[index]);
 			
-			System.out.println("Enter 1 to continue.  ALl other values return to main menu");
+			System.out.println("Enter 1 to continue.  All other values return to main menu");
 
 			String line = scanner.nextLine();
 
+			// checks user input
 			switch (line) {
 				case "1":
 					clearTerminal();
 					index++;
 					break;
 				default:
+					clearTerminal();
 					return;
 			}
 		}
@@ -545,6 +577,7 @@ class NeuralNet {
 		System.out.flush();
 	}
 
+	// transposes a given matrix
 	private double[][] transpose(double[][] matrix) {
 		double[][] temp = new double[matrix[0].length][matrix.length];
 		for (int i=0; i<matrix.length; i++) {
@@ -555,6 +588,7 @@ class NeuralNet {
 		return temp;
 	}
 
+	// gets the hadamard product of 2 arrays
 	private double[] hadamard(double[] A, double[] B){
 		double[] res = new double[A.length];
 		for (int i=0; i<A.length; i++) {
@@ -581,6 +615,7 @@ class NeuralNet {
 		return res;
 	}
 
+	// gets the dot product of 2 inputs; 1 matrix 1 array
 	private double[] dot(double[][] A, double[] B) {
 		double[] res = new double[A.length];
 		for (int i=0; i<A.length; i++) {
@@ -593,6 +628,7 @@ class NeuralNet {
 		return res;
 	}
 
+	// gets the dot product of 2 arrays
 	private double[][] prod(double[] A, double[] B) {
 		double[][] res = new double[A.length][B.length];
 		for (int i=0; i<A.length; i++) {
