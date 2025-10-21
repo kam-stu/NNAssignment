@@ -12,6 +12,9 @@ class NeuralNet {
 	private double[][] inputs;
 	private double[][] outputs;
 
+	private double[][] testInput;
+	private double[][] testOutput;
+
 	private double[][][] miniBatchInputs;
 	private double[][][] miniBatchOutputs;
 	
@@ -26,12 +29,19 @@ class NeuralNet {
 
 	private boolean isTrained = false;
 	private boolean hasWeights = false;
-	
+
+
+	private final String trainCSV = "mnist_train.csv";
+	private final String testCSV = "mnist_test.csv";
+	private final String savedCSV = "saved_data.csv";
+
 	public NeuralNet(int inputLayer, int hiddenLayer, int outputLayer, double learningRate) {
 		this.inputLayer = inputLayer;
 		this.hiddenLayer = hiddenLayer;
 		this.outputLayer = outputLayer;
 		this.learningRate = learningRate;
+		this.readCSV(true);
+		this.readCSV(false);
 	}
 
 
@@ -46,7 +56,15 @@ class NeuralNet {
 	}
 
 	// parses CSV and adds inputs and outputs to their respective fields
-	public void readCSV(String filename) {
+	public void readCSV(boolean isTrain) {
+		String filename;
+		if (isTrain) {
+			filename = this.trainCSV;
+		}
+		else {
+			filename = this.testCSV;
+		}
+
 		List<double[]> inputList = new ArrayList<>();
 		List<double[]> outputList = new ArrayList<>();
 
@@ -74,9 +92,15 @@ class NeuralNet {
 			e.printStackTrace();
 		}
 
-
-		this.inputs = inputList.toArray(new double[inputList.size()][]);
-		this.outputs = outputList.toArray(new double[outputList.size()][]);
+		if (isTrain) {
+			this.inputs = inputList.toArray(new double[inputList.size()][]);
+			this.outputs = outputList.toArray(new double[outputList.size()][]);
+	
+		}
+		else {
+			this.testInput = inputList.toArray(new double[inputList.size()][]);
+			this.testOutput = outputList.toArray(new double[outputList.size()][]);
+		}
 	}
 
 	private void initWeights() {
@@ -226,7 +250,7 @@ class NeuralNet {
 	// tests a batch of inputs and outputs
 	// assumes that the test inputs and outputs are set to the input and output
 	// values for the NeuralNetwork
-	public void testBatch() {
+	public void testBatch(boolean isTest) {
     		if (!isTrained) {
         		System.out.println("Network is not trained yet!");
         		return;
@@ -236,7 +260,8 @@ class NeuralNet {
     		int totalSeen = inputs.length;
     		int[] correctDigit = new int[10];
     		int[] totalDigit = new int[10];
-
+		
+		
     		for (int i = 0; i < inputs.length; i++) {
         		double[] hiddenOut = forwardProp(inputs[i], Whidden, Bhidden);
         		double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
@@ -429,7 +454,7 @@ class NeuralNet {
 		}
 	}
 	
-	// Holds the ranges for what each input should return (1.0 => pure white pixel => return #
+	// Holds the ranges for what each input should return (1.0 => pure white pixel => return #)
 	// Made this function then IMMEDIATELY realized i couldve just used a hashmap LOL
 	private char generateChar(double value) {
 		if (value <= 0.05) return ' ';
