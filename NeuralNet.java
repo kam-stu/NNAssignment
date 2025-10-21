@@ -47,6 +47,7 @@ class NeuralNet {
 		System.out.println("Parsing Testing CSV...");
 		this.readCSV(false);
 		System.out.println("Testing CSV parsed.");
+		this.clearTerminal();
 	}
 
 
@@ -496,6 +497,8 @@ class NeuralNet {
 		}
 	}
 
+	// Function for displaying the test case, expected and actual output, and drawing the ASCII art of 
+	// all testing cases
 	public void displayImage(boolean onlyIncorrect) {
 		Scanner scanner = new Scanner(System.in);
 		int index = 0;
@@ -504,24 +507,22 @@ class NeuralNet {
 			int actual = argMax(this.testOutput[index]);
 			int predicted = this.test(index, true);
 
-			while (true) {
-				// Skip through correct values if only looking for incorrect
-				if (onlyIncorrect && actual == predicted) {
-					index++;
-					if (index >= this.testOutput.length -1) {
-						break;
-					}
+			// Skip through correct values if only looking for incorrect
+			while (onlyIncorrect && actual == predicted) {
+				index++;
+				if (index >= this.testOutput.length -1) {
+					scanner.close();
+					return;
 				}
-				else {
-					break;
-				}
+				actual = argMax(this.testOutput[index]);
+				predicted = this.test(index, true);
 			}
+
 			System.out.println ("Testing Case #" + (index+1) + 
 			": Correct classification = " + actual + " Network Output = " + predicted +  
 			(actual==predicted ? " Correct" : " Incorrect"));
-			System.out.println();
 
-			asciiArt(this.testOutput[index]);
+			asciiArt(this.testInput[index]);
 			
 			System.out.println("Enter 1 to continue.  ALl other values return to main menu");
 
@@ -529,14 +530,19 @@ class NeuralNet {
 
 			switch (line) {
 				case "1":
+					clearTerminal();
 					index++;
 					break;
 				default:
 					return;
 			}
 		}
-		
 		scanner.close();
+	}
+
+	public void clearTerminal() {
+		System.out.println("\033[H\033[2J");
+		System.out.flush();
 	}
 
 	private double[][] transpose(double[][] matrix) {
