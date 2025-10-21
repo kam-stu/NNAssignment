@@ -40,8 +40,13 @@ class NeuralNet {
 		this.hiddenLayer = hiddenLayer;
 		this.outputLayer = outputLayer;
 		this.learningRate = learningRate;
+
+		System.out.println("Parsing Training CSV...");
 		this.readCSV(true);
+		System.out.println("Training CSV parsed.");
+		System.out.println("Parsing Testing CSV...");
 		this.readCSV(false);
+		System.out.println("Testing CSV parsed.");
 	}
 
 
@@ -158,6 +163,8 @@ class NeuralNet {
 		}
 	}
 
+	// shuffles the dataset so it's not trained on the same exact order
+	// keeps input and output together
 	private void shuffleData() {
 		int n = this.inputs.length;
 		Random rand = new Random();
@@ -180,7 +187,9 @@ class NeuralNet {
 
 	public void train(int epochs, int batchSize) {
 		
-		initWeights();
+		if (!this.hasWeights) {
+			initWeights();
+		}
 	
 		for (int epoch=0; epoch<epochs; epoch++) {
 			shuffleData();
@@ -285,20 +294,23 @@ class NeuralNet {
     		System.out.println("Overall Accuracy: " + totalCorrect + "/" + totalSeen + " = " + accuracy + "%");
 	}
 
-
 	// tests the network on a single given input
-	public int test(double[] input) {
+	public int test(int index, boolean isTest) {
 		if (!isTrained) {
 			System.out.println("Network is not trained yet!");
 			return -1;
 		}
 
-		asciiArt(input);
-
-		double[] hiddenOut = forwardProp(input, Whidden, Bhidden);
-		double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
-
-		return argMax(finalOut);
+		if (isTest) {
+			double[] hiddenOut = forwardProp(this.testInput[index], Whidden, Bhidden);
+			double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
+			return argMax(finalOut);
+		}
+		else {
+			double[] hiddenOut = forwardProp(this.inputs[index], Whidden, Bhidden);
+			double[] finalOut = forwardProp(hiddenOut, Woutput, Boutput);
+			return argMax(finalOut);
+		}
 	}
 
 	// function for getting the max activation 
@@ -316,8 +328,6 @@ class NeuralNet {
 		return maxIndex;
 	}
 
-	public void loadWeights() {}
-	
 	private double[] forwardProp(double[] A0, double[][] W, double[] B) {
 		double[] A = new double[B.length];
 		
@@ -350,6 +360,183 @@ class NeuralNet {
 			hadamard(A, subtract(ones(A.length), A))
 		);
 		return res;
+	}
+	
+	// parses a csv and loads all weights into the neural network
+	public void loadWeights() {
+		try (BufferedReader reader = new BufferedReader(new FileReader(savedCSV))) {
+			String line;
+			String section = "";
+			ArrayList<double[]> temp = new ArrayList<>();
+
+			while ((line = reader.readLine()) != null) {
+				line = line.trim();
+
+				// skip any empty lines
+				if (line.isEmpty()) continue; 
+
+				// detects when a new section is reached
+				// assign values appropriately and move on to the next section
+				if (line.equals("Whidden") || line.equals("Bhidden") || 
+					line.equals("Woutput") || line.equals("Boutput")) {
+
+						if (!section.isEmpty() && !temp.isEmpty()) {
+							assignVal(section, temp);
+							temp.clear();
+						}
+					section = line;
+					continue; 
+				}
+				
+				// parse lines with weights/biases
+				String[] parts = line.split(",");
+				double[] vals = new double[parts.length];
+				for (int i=0; i<parts.length; i++) {
+					vals[i] = Double.parseDouble(parts[i]);
+				}
+				temp.add(vals);
+			}
+
+			if (!section.isEmpty() && !temp.isEmpty()) {
+				assignVal(section, temp);
+			}
+
+			System.out.println("Weights and biases loaded");
+			this.hasWeights = true;
+			this.isTrained = true;
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	private void assignVal(String section, ArrayList<double[]> val) {
+		switch (section) {
+			case "Whidden":
+				Whidden = new double[val.size()][];
+				for (int i=0; i<val.size(); i++) {
+					Whidden[i] = val.get(i);
+				}
+				break;
+			case "Bhidden":
+				Bhidden = val.get(0);
+				break;
+			case "Woutput":
+				Woutput = new double[val.size()][];
+				for (int i=0; i<val.size(); i++) {
+					Woutput[i] = val.get(i);
+				}
+				break;
+			case "Boutput":
+				Boutput = val.get(0);
+				break;
+		}
+	}
+
+	// puts all current weights and biases into the a csv to be loaded later
+	public void saveWeights() {
+		try (FileWriter writer = new FileWriter(savedCSV)) {
+
+			writer.write("Whidden\n");
+			for (int i=0; i<Whidden.length; i++) {
+				for (int j=0; j<Whidden[i].length;j++) {
+					if (j<Whidden[i].length-1) {
+						writer.write(Whidden[i][j] + ",");
+					}
+
+					// at last element, don't put comma
+					else {
+						writer.write(Whidden[i][j] + "");
+					}
+				}
+				writer.write("\n");
+			}
+			
+			writer.write("Bhidden\n");
+			for (int i=0; i<Bhidden.length; i++) {
+				if (i < Bhidden.length-1) {
+					writer.write(Bhidden[i] + ",");
+				}
+				else {
+					writer.write(Bhidden[i] + "");
+				}
+			}
+			writer.write("\n");
+
+			writer.write("Woutput\n");
+			for (int i=0; i<Woutput.length; i++) {
+				for (int j=0; j<Woutput[i].length;j++) {
+					if (j<Woutput[i].length-1) {
+						writer.write(Woutput[i][j] + ",");
+					}
+
+					// at last element, don't put comma
+					else {
+						writer.write(Woutput[i][j] + "");
+					}
+				}
+				writer.write("\n");
+			}
+
+			writer.write("Boutput\n");
+			for (int i=0; i<Boutput.length; i++) {
+				if (i < Boutput.length-1) {
+					writer.write(Boutput[i] + ",");
+				}
+				else {
+					writer.write(Boutput[i] + "");
+				}
+			}
+			writer.write("\n");
+
+			System.out.println("Weights and biases saved to " + savedCSV);
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void displayImage(boolean onlyIncorrect) {
+		Scanner scanner = new Scanner(System.in);
+		int index = 0;
+
+		while (index < this.testInput.length) {
+			int actual = argMax(this.testOutput[index]);
+			int predicted = this.test(index, true);
+
+			while (true) {
+				// Skip through correct values if only looking for incorrect
+				if (onlyIncorrect && actual == predicted) {
+					index++;
+					if (index >= this.testOutput.length -1) {
+						break;
+					}
+				}
+				else {
+					break;
+				}
+			}
+			System.out.println ("Testing Case #" + (index+1) + 
+			": Correct classification = " + actual + " Network Output = " + predicted +  
+			(actual==predicted ? " Correct" : " Incorrect"));
+			System.out.println();
+
+			asciiArt(this.testOutput[index]);
+			
+			System.out.println("Enter 1 to continue.  ALl other values return to main menu");
+
+			String line = scanner.nextLine();
+
+			switch (line) {
+				case "1":
+					index++;
+					break;
+				default:
+					return;
+			}
+		}
+		
+		scanner.close();
 	}
 
 	private double[][] transpose(double[][] matrix) {
@@ -470,20 +657,5 @@ class NeuralNet {
 		if (value <= 0.85) return '@';
 		if (value <= 1.0) return '#';
 		return '!';
-	}
-
-	private void printArr(double[] arr) {
-		for (int i=0; i<arr.length; i++) {
-			System.out.println(arr[i]);
-		}
-	}
-
-	private void printMatrix(double[][] matrix) {
-		for (int i=0; i<matrix.length; i++) {
-			for (int j=0; j<matrix[i].length; j++) {
-				System.out.print(matrix[i][j] + "\t");
-			}
-			System.out.println();
-		}
 	}
 }
