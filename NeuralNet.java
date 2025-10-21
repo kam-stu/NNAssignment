@@ -462,6 +462,10 @@ class NeuralNet {
 	 * etc.
 	 */
 	public void saveWeights() {
+		if (!this.hasWeights) {
+			System.out.println("The neural network has no weights!");
+			return;
+		}
 		try (FileWriter writer = new FileWriter(savedCSV, false)) {
 
 			writer.write("Whidden\n");
